@@ -56,7 +56,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        docker.withRegistry("https://${REPOSITORY_URI}", "ecr:${AWS_DEFAULT_REGION}:${registryCredential}") {
+                        docker.withRegistry("https://${REPOSITORY_URI}", "ecr:${AWS_DEFAULT_REGION}:nodeapp") {
                             dockerImage.push()
                             echo "Successfully pushed Docker image to ECR: ${REPOSITORY_URI}:${IMAGE_TAG}"
                         }
