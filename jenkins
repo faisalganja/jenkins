@@ -1,0 +1,110 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_ACCOUNT_ID = "682033459930" // Replace with your AWS Account ID
+        AWS_DEFAULT_REGION = "us-east-1" // Replace with your AWS Region
+        CLUSTER_NAME = "nodeapp" // ECS Cluster Name
+        SERVICE_NAME = "nodeapp" // ECS Service Name
+        TASK_DEFINITION_NAME = "nodeapp-task" // ECS Task Definition Name
+        DESIRED_COUNT = "1" // Desired number of tasks for the ECS service
+        IMAGE_REPO_NAME = "nodeapp" // ECR Repository Name
+        IMAGE_TAG = "${env.BUILD_ID}" // Use Jenkins build ID as the image tag
+        REPOSITORY_URI = "682033459930.dkr.ecr.us-east-1.amazonaws.com/${IMAGE_REPO_NAME}" // Full ECR Repository URI
+        registryCredential = "aws-credentials" // Jenkins credential ID for AWS authentication
+        JOB_NAME = "${env.JOB_NAME}" // Jenkins job name
+        TEST_CONTAINER_NAME = "${JOB_NAME}-test-server" // Test container name
+    }
+
+    stages {
+        // Stage 1: Build Docker Image
+        stage('Building Image') {
+            steps {
+                script {
+                    try {
+                        dockerImage = docker.build("${IMAGE_REPO_NAME}:${IMAGE_TAG}")
+                        echo "Successfully built Docker image: ${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+                    } catch (Exception e) {
+                        echo "Failed to build Docker image: ${e.message}"
+                        currentBuild.result = 'FAILURE'
+                        throw e
+                    }
+                }
+            }
+        }
+
+        // Stage 2: Run Tests Inside the Container
+        stage('Running Tests') {
+            steps {
+                script {
+                    try {
+                        sh """
+                            docker run -i --rm --name "${TEST_CONTAINER_NAME}" "${IMAGE_REPO_NAME}:${IMAGE_TAG}" npm test -- --watchAll=false
+                        """
+                        echo "Tests completed successfully."
+                    } catch (Exception e) {
+                        echo "Tests failed: ${e.message}"
+                        currentBuild.result = 'FAILURE'
+                        throw e
+                    }
+                }
+            }
+        }
+
+        // Stage 3: Push Docker Image to ECR
+        stage('Releasing') {
+            steps {
+                script {
+                    try {
+                        docker.withRegistry("https://${REPOSITORY_URI}", "ecr:${AWS_DEFAULT_REGION}:${registryCredential}") {
+                            dockerImage.push()
+                            echo "Successfully pushed Docker image to ECR: ${REPOSITORY_URI}:${IMAGE_TAG}"
+                        }
+                    } catch (Exception e) {
+                        echo "Failed to push Docker image to ECR: ${e.message}"
+                        currentBuild.result = 'FAILURE'
+                        throw e
+                    }
+                }
+            }
+        }
+
+        // Stage 4: Deploy to ECS
+        stage('Deploy') {
+            steps {
+                script {
+                    try {
+                        withAWS(credentials: registryCredential, region: "${AWS_DEFAULT_REGION}") {
+                            sh """
+                                # Update the ECS service to use the new task definition
+                                aws ecs update-service \
+                                    --cluster ${CLUSTER_NAME} \
+                                    --service ${SERVICE_NAME} \
+                                    --force-new-deployment
+                            """
+                            echo "ECS service updated successfully. New deployment triggered."
+                        }
+                    } catch (Exception e) {
+                        echo "Failed to update ECS service: ${e.message}"
+                        currentBuild.result = 'FAILURE'
+                        throw e
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            // Clean up local Docker resources
+            script {
+                try {
+                    sh 'docker system prune -a -f'
+                    echo "Local Docker resources cleaned up."
+                } catch (Exception e) {
+                    echo "Failed to clean up Docker resources: ${e.message}"
+                }
+            }
+        }
+    }
+}
