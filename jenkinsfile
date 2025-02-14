@@ -6,7 +6,7 @@ pipeline {
         AWS_DEFAULT_REGION = "us-east-1" // Replace with your AWS Region
         CLUSTER_NAME = "nodeapp" // ECS Cluster Name
         SERVICE_NAME = "nodeapp" // ECS Service Name
-        TASK_DEFINITION_NAME = "nodeapp-task" // ECS Task Definition Name
+        TASK_DEFINITION_NAME = "nodeapp" // ECS Task Definition Name
         DESIRED_COUNT = "1" // Desired number of tasks for the ECS service
         IMAGE_REPO_NAME = "nodeapp" // ECR Repository Name
         IMAGE_TAG = "${env.BUILD_ID}" // Use Jenkins build ID as the image tag
@@ -56,7 +56,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        docker.withRegistry("https://${REPOSITORY_URI}", "ecr:${AWS_DEFAULT_REGION}:nodeapp") {
+                        docker.withRegistry("https://${REPOSITORY_URI}", "ecr:${AWS_DEFAULT_REGION}:${registryCredential}") {
                             dockerImage.push()
                             echo "Successfully pushed Docker image to ECR: ${REPOSITORY_URI}:${IMAGE_TAG}"
                         }
@@ -105,6 +105,11 @@ pipeline {
                     echo "Failed to clean up Docker resources: ${e.message}"
                 }
             }
+        }
+        failure {
+            // Notify on failure (optional)
+            echo "Pipeline failed. Please check the logs for details."
+            // Add Slack/email notifications here if needed
         }
     }
 }
