@@ -11,7 +11,7 @@ pipeline {
         IMAGE_REPO_NAME = "nodeapp" // ECR Repository Name
         IMAGE_TAG = "${env.BUILD_ID}" // Use Jenkins build ID as the image tag
         REPOSITORY_URI = "682033459930.dkr.ecr.us-east-1.amazonaws.com/${IMAGE_REPO_NAME}" // Full ECR Repository URI
-        registryCredential = "aws-credentials" // Jenkins credential ID for AWS authentication
+        registryCredential = "fat" // Jenkins credential ID for AWS authentication
         JOB_NAME = "${env.JOB_NAME}" // Jenkins job name
         TEST_CONTAINER_NAME = "${JOB_NAME}-test-server" // Test container name
     }
